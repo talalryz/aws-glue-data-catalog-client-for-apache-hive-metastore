@@ -714,7 +714,7 @@ public class GlueMetastoreClientDelegate {
     Path partLocation = null;
     String partLocationStr = null;
     if (part.getSd() != null) {
-      partLocationStr = part.getSd().getLocation();
+      partLocationStr = part.getSd().getLocation().replaceAll("s3://", "s3a://");
     }
 
     if (StringUtils.isEmpty(partLocationStr)) {
