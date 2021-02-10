@@ -80,10 +80,7 @@ import org.apache.thrift.TException;
 
 import java.io.IOException;
 import java.net.URI;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -890,16 +887,29 @@ public class AWSCatalogMetastoreClient implements IMetaStoreClient {
       return conf.get(key, metaConfVar.getDefaultValue());
   }
 
+  private void replaceS3WithS3a(org.apache.hadoop.hive.metastore.api.Partition p){
+    List<String> s3Parts = p.getValues();
+    List<String> s3aParts = new ArrayList<>();
+    for (String val : s3Parts){
+      s3aParts.add(val.replaceAll("s3://", "s3a://"));
+    }
+    p.setValues(s3aParts);
+  }
+
   @Override
   public org.apache.hadoop.hive.metastore.api.Partition getPartition(String dbName, String tblName, List<String> values)
       throws NoSuchObjectException, MetaException, TException {
-    return glueMetastoreClientDelegate.getPartition(dbName, tblName, values);
+    org.apache.hadoop.hive.metastore.api.Partition p = glueMetastoreClientDelegate.getPartition(dbName, tblName, values);
+    replaceS3WithS3a(p);
+    return p;
   }
 
   @Override
   public org.apache.hadoop.hive.metastore.api.Partition getPartition(String dbName, String tblName, String partitionName)
       throws MetaException, UnknownTableException, NoSuchObjectException, TException {
-    return glueMetastoreClientDelegate.getPartition(dbName, tblName, partitionName);
+    org.apache.hadoop.hive.metastore.api.Partition p = glueMetastoreClientDelegate.getPartition(dbName, tblName, partitionName);
+    replaceS3WithS3a(p);
+    return p;
   }
 
   @Override
@@ -932,7 +942,7 @@ public class AWSCatalogMetastoreClient implements IMetaStoreClient {
                 this.get_privilege_set(obj, userName, groupNames);
           partition.setPrivileges(privilegeSet);
       }
-
+      replaceS3WithS3a(partition);
       return partition;
   }
 
@@ -940,7 +950,11 @@ public class AWSCatalogMetastoreClient implements IMetaStoreClient {
   public List<org.apache.hadoop.hive.metastore.api.Partition> getPartitionsByNames(
         String databaseName, String tableName, List<String> partitionNames)
         throws NoSuchObjectException, MetaException, TException {
-    return glueMetastoreClientDelegate.getPartitionsByNames(databaseName, tableName, partitionNames);
+    List<org.apache.hadoop.hive.metastore.api.Partition> pList = glueMetastoreClientDelegate.getPartitionsByNames(databaseName, tableName, partitionNames);
+    for (org.apache.hadoop.hive.metastore.api.Partition p: pList){
+      replaceS3WithS3a(p);
+    }
+    return pList;
   }
 
   @Override
@@ -1101,7 +1115,12 @@ public class AWSCatalogMetastoreClient implements IMetaStoreClient {
   public List<String> listPartitionNames(String databaseName, String tableName,
                                          List<String> values, short max)
         throws MetaException, TException, NoSuchObjectException {
-    return glueMetastoreClientDelegate.listPartitionNames(databaseName, tableName, values, max);
+    List<String> pNames = glueMetastoreClientDelegate.listPartitionNames(databaseName, tableName, values, max);
+    List<String> pS3aNames = new ArrayList<>();
+    for (String p: pNames){
+      pS3aNames.add(p.replaceAll("s3://", "s3a://"));
+    }
+    return pS3aNames;
   }
 
   @Override
@@ -1134,7 +1153,7 @@ public class AWSCatalogMetastoreClient implements IMetaStoreClient {
         org.apache.hadoop.hive.metastore.api.Table table = getTable(databaseName, tableName);
         expression = ExpressionHelper.buildExpressionFromPartialSpecification(table, values);
     }
-    return glueMetastoreClientDelegate.getPartitions(databaseName, tableName, expression, (long) max);
+    return convertListPartitionsToS3a(glueMetastoreClientDelegate.getPartitions(databaseName, tableName, expression, (long) max));
   }
 
   @Override
@@ -1168,7 +1187,16 @@ public class AWSCatalogMetastoreClient implements IMetaStoreClient {
     if (StringUtils.isNotBlank(filter)) {
         filter = ExpressionHelper.replaceDoubleQuoteWithSingleQuotes(filter);
     }
-    return glueMetastoreClientDelegate.getPartitions(databaseName, tableName, filter, (long) max);
+    return convertListPartitionsToS3a(
+            glueMetastoreClientDelegate.getPartitions(databaseName, tableName, filter, (long) max)
+    );
+  }
+
+  private List<org.apache.hadoop.hive.metastore.api.Partition> convertListPartitionsToS3a(List<org.apache.hadoop.hive.metastore.api.Partition> pList){
+    for (org.apache.hadoop.hive.metastore.api.Partition p: pList){
+      replaceS3WithS3a(p);
+    }
+    return pList;
   }
 
   @Override
@@ -1187,7 +1215,7 @@ public class AWSCatalogMetastoreClient implements IMetaStoreClient {
           p.setPrivileges(set);
       }
 
-      return partitions;
+      return convertListPartitionsToS3a(partitions);
   }
 
   @Override
@@ -1213,7 +1241,7 @@ public class AWSCatalogMetastoreClient implements IMetaStoreClient {
       p.setPrivileges(set);
     }
 
-    return partitions;
+    return convertListPartitionsToS3a(partitions);
   }
 
   @Override
