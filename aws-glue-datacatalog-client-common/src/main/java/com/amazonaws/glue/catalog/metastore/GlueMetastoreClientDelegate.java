@@ -730,7 +730,7 @@ public class GlueMetastoreClientDelegate {
       }
       partLocation = wh.getDnsPath(new Path(partLocationStr));
     }
-    return partLocation;
+    return new Path(partLocation.toString().replaceAll("s3://", "s3a://"));
   }
 
   public List<String> listPartitionNames(
@@ -750,9 +750,41 @@ public class GlueMetastoreClientDelegate {
     for(org.apache.hadoop.hive.metastore.api.Partition p : partitions) {
       names.add(Warehouse.makePartName(table.getPartitionKeys(), p.getValues()));
     }
-    return names;
+    return replaceS3WithS3a(names);
   }
 
+  private List<String> replaceS3WithS3a(List <String> s3Names){
+    List<String> s3aNames = new ArrayList<>();
+    for (String val : s3Names){
+      s3aNames.add(val.replaceAll("s3://", "s3a://"));
+    }
+    return s3aNames;
+  }
+
+  private Partition replaceS3WithS3a(Partition p){
+    List<String> s3Parts = p.getValues();
+    List<String> s3aParts = new ArrayList<>();
+    for (String val : s3Parts){
+      s3aParts.add(val.replaceAll("s3://", "s3a://"));
+    }
+    p.setValues(s3aParts);
+    return p;
+  }
+  private org.apache.hadoop.hive.metastore.api.Partition replaceS3WithS3a(org.apache.hadoop.hive.metastore.api.Partition p){
+    List<String> s3Parts = p.getValues();
+    List<String> s3aParts = new ArrayList<>();
+    for (String val : s3Parts){
+      s3aParts.add(val.replaceAll("s3://", "s3a://"));
+    }
+    p.setValues(s3aParts);
+    return p;
+  }
+  private List<Partition> replaceListS3WithS3a(List<Partition> pList){
+    for (Partition p: pList){
+      replaceS3WithS3a(p);
+    }
+    return pList;
+  }
   public List<org.apache.hadoop.hive.metastore.api.Partition> getPartitionsByNames(
       String databaseName,
       String tableName,
@@ -768,7 +800,7 @@ public class GlueMetastoreClientDelegate {
     }
     try {
       List<Partition> partitions =
-              glueMetastore.getPartitionsByNames(databaseName, tableName, partitionsToGet);
+              replaceListS3WithS3a(glueMetastore.getPartitionsByNames(databaseName, tableName, partitionsToGet));
 
       return CatalogToHiveConverter.convertPartitions(partitions);
     } catch (AmazonServiceException e) {
@@ -786,7 +818,7 @@ public class GlueMetastoreClientDelegate {
     checkArgument(StringUtils.isNotEmpty(tblName), "tblName cannot be null or empty");
     checkArgument(StringUtils.isNotEmpty(partitionName), "partitionName cannot be null or empty");
     List<String> values = partitionNameToVals(partitionName);
-    return getPartition(dbName, tblName, values);
+    return replaceS3WithS3a(getPartition(dbName, tblName, values));
   }
 
   public org.apache.hadoop.hive.metastore.api.Partition getPartition(String dbName, String tblName, List<String> values) throws TException {
@@ -809,7 +841,7 @@ public class GlueMetastoreClientDelegate {
       logger.error(msg, e);
       throw new MetaException(msg + e);
     }
-    return CatalogToHiveConverter.convertPartition(partition);
+    return CatalogToHiveConverter.convertPartition(replaceS3WithS3a(partition));
   }
 
   public List<org.apache.hadoop.hive.metastore.api.Partition> getPartitions(
@@ -821,7 +853,7 @@ public class GlueMetastoreClientDelegate {
     checkArgument(StringUtils.isNotEmpty(databaseName), "databaseName cannot be null or empty");
     checkArgument(StringUtils.isNotEmpty(tableName), "tableName cannot be null or empty");
     List<Partition> partitions = getCatalogPartitions(databaseName, tableName, filter, max);
-    return CatalogToHiveConverter.convertPartitions(partitions);
+    return CatalogToHiveConverter.convertPartitions(replaceListS3WithS3a(partitions));
   }
 
   public List<Partition> getCatalogPartitions(
@@ -833,7 +865,7 @@ public class GlueMetastoreClientDelegate {
     checkArgument(StringUtils.isNotEmpty(databaseName), "databaseName cannot be null or empty");
     checkArgument(StringUtils.isNotEmpty(tableName), "tableName cannot be null or empty");
     try{
-      return glueMetastore.getPartitions(databaseName, tableName, expression, max);
+      return replaceListS3WithS3a(glueMetastore.getPartitions(databaseName, tableName, expression, max));
     } catch (AmazonServiceException e) {
       throw CatalogToHiveConverter.wrapInHiveException(e);
     } catch (Exception e) {

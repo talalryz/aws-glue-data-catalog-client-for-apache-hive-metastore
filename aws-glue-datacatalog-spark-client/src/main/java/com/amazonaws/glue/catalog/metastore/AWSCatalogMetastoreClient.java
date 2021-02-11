@@ -896,6 +896,13 @@ public class AWSCatalogMetastoreClient implements IMetaStoreClient {
     p.setValues(s3aParts);
   }
 
+  private List<org.apache.hadoop.hive.metastore.api.Partition> convertListPartitionsToS3a(List<org.apache.hadoop.hive.metastore.api.Partition> pList){
+    for (org.apache.hadoop.hive.metastore.api.Partition p: pList){
+      replaceS3WithS3a(p);
+    }
+    return pList;
+  }
+
   @Override
   public org.apache.hadoop.hive.metastore.api.Partition getPartition(String dbName, String tblName, List<String> values)
       throws NoSuchObjectException, MetaException, TException {
@@ -1170,7 +1177,7 @@ public class AWSCatalogMetastoreClient implements IMetaStoreClient {
     String catalogExpression =  ExpressionHelper.convertHiveExpressionToCatalogExpression(expr);
     List<org.apache.hadoop.hive.metastore.api.Partition> partitions =
         glueMetastoreClientDelegate.getPartitions(databaseName, tableName, catalogExpression, (long) max);
-    result.addAll(partitions);
+    result.addAll(convertListPartitionsToS3a(partitions));
 
     return false;
   }
@@ -1190,13 +1197,6 @@ public class AWSCatalogMetastoreClient implements IMetaStoreClient {
     return convertListPartitionsToS3a(
             glueMetastoreClientDelegate.getPartitions(databaseName, tableName, filter, (long) max)
     );
-  }
-
-  private List<org.apache.hadoop.hive.metastore.api.Partition> convertListPartitionsToS3a(List<org.apache.hadoop.hive.metastore.api.Partition> pList){
-    for (org.apache.hadoop.hive.metastore.api.Partition p: pList){
-      replaceS3WithS3a(p);
-    }
-    return pList;
   }
 
   @Override
